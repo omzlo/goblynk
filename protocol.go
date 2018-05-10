@@ -51,6 +51,7 @@ type Client struct {
 	authKey      string
 	readers      map[uint]DeviceReader
 	writers      map[uint]DeviceWriter
+	onConnect    func(uint) error
 	state        int
 }
 
@@ -123,11 +124,26 @@ func (client *Client) Run() {
 }
 
 func (client *Client) VirtualWrite(pin uint, v ...interface{}) {
+	var response Message
+
+	response.Build(CMD_HARDWARE).PushString("vw").PushInt(int(pin))
+
 	for _, item := range v {
 		switch t := item.(type) {
-
+		case byte:
+			response.Body.PushByte(t)
+		case int:
+			response.Body.PushInt(t)
+		case string:
+			response.Body.PushString(t)
+		case fmt.Stringer:
+			response.Body.PushString(t.String())
+		default:
+			fmt.Printf("VirtualWrite does not know how to process %T\n", t)
+			panic("Type error")
 		}
 	}
+	client.sendMessage(response)
 }
 
 func (client *Client) RegisterDeviceReader(pin uint, r DeviceReader) {
@@ -166,10 +182,18 @@ func (client *Client) UnregisterDeviceWriter(pin uint) {
 	delete(client.writers, pin)
 }
 
+func (client *Client) OnConnect(fn func(uint) error) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+
+	client.onConnect = fn
+}
+
 /* private */
 
 func (client *Client) runCycle() {
 	var msg Message
+	var connectionCount uint = 0
 
 	go client.heartbeatRunCycle()
 	for {
@@ -178,7 +202,16 @@ func (client *Client) runCycle() {
 			return
 		}
 
-		log.Printf("Connected and authenticated to %s\n", client.address)
+		connectionCount++
+		log.Printf("Connected and authenticated to %s, connection cycle %d\n", client.address, connectionCount)
+
+		if client.onConnect != nil {
+			if err := client.onConnect(connectionCount); err != nil {
+				log.Printf("OnConnect returned an error: %s", err)
+				client.conn.Close()
+				return
+			}
+		}
 
 		for client.state == STATE_CONNECTED {
 			if err := client.recvMessage(&msg); err != nil {
@@ -314,14 +347,12 @@ func (client *Client) sendMessage(m Message) error {
 
 	if m.Header.Command == CMD_RESPONSE {
 		data, _ := m.Header.MarshalBinary()
-		log.Printf("Sending %s", m.Header)
-		//fmt.Print(hex.Dump(data))
+		log.Printf("Sending header %s", m.Header)
 		_, err = client.conn.Write(data)
 
 	} else {
 		data, _ := m.MarshalBinary()
-		log.Printf("Sending header %s", m)
-		//fmt.Print(hex.Dump(data))
+		log.Printf("Sending message %s", m)
 		_, err = client.conn.Write(data)
 	}
 

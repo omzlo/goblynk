@@ -1,32 +1,22 @@
 package main
 
 import (
-	"./blynk"
-	//"encoding/hex"
-	//"fmt"
+	"fmt"
+	"github.com/omzlo/goblynk"
 	"math/rand"
+	"os"
 )
 
 func main() {
 	temp := 25
 
-	/*
-		var m blynk.Message
+	key := os.Getenv("BLYNK_AUTH_TOKEN")
+	if key == "" {
+		fmt.Println("Missing BLYNK_AUTH_TOKEN environement variable")
+		os.Exit(-2)
+	}
 
-		m.Build(blynk.CMD_LOGIN).PushString("0fee55cf5dc54ffd843c9478a5421226")
-
-		fmt.Println(m)
-
-		e, _ := m.MarshalBinary()
-
-		fmt.Printf("binary:\n%s", hex.Dump(e))
-
-		m.UnmarshalBinary(e)
-
-		fmt.Println(m)
-	*/
-
-	client := blynk.NewClient(blynk.BLYNK_ADDRESS, "0fee55cf5dc54ffd843c9478a5421226")
+	client := blynk.NewClient(blynk.BLYNK_ADDRESS, key)
 
 	client.RegisterDeviceReaderFunction(2, func(pin uint, body *blynk.Body) {
 		temp = temp + rand.Intn(3) - 1
