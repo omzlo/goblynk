@@ -123,7 +123,7 @@ func (client *Client) Run() {
 	client.runCycle()
 }
 
-func (client *Client) VirtualWrite(pin uint, v ...interface{}) {
+func (client *Client) VirtualWrite(pin uint, v ...interface{}) error {
 	var response Message
 
 	response.Build(CMD_HARDWARE).PushString("vw").PushInt(int(pin))
@@ -143,7 +143,15 @@ func (client *Client) VirtualWrite(pin uint, v ...interface{}) {
 			panic("Type error")
 		}
 	}
-	client.sendMessage(response)
+	return client.sendMessage(response)
+}
+
+func (client *Client) Notify(notification string) error {
+	var msg Message
+
+	msg.Build(CMD_NOTIFY).PushString(notification)
+
+	return client.sendMessage(msg)
 }
 
 func (client *Client) RegisterDeviceReader(pin uint, r DeviceReader) {
