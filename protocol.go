@@ -205,9 +205,19 @@ func (client *Client) runCycle() {
 
 	go client.heartbeatRunCycle()
 	for {
-		if err := client.connect(); err != nil {
-			log.Printf("Connection to %s failed: %s", client.address, err)
-			return
+
+		backoff := 3 * time.Second
+		for {
+			if err := client.connect(); err != nil {
+				log.Printf("Connection to %s failed: %s", client.address, err)
+				log.Printf("Waiting %s before attempting to reconnect.", backoff)
+				time.Sleep(backoff)
+				if backoff < 192*time.Second {
+					backoff = 2 * backoff
+				}
+			} else {
+				break
+			}
 		}
 
 		connectionCount++
