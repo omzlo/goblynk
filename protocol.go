@@ -2,12 +2,15 @@ package blynk
 
 import (
 	//"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 	"time"
 )
+
+var ErrNotConnected = errors.New("Not connected")
 
 type DeviceReader interface {
 	DeviceRead(pin uint, param *Body)
@@ -233,6 +236,7 @@ func (client *Client) runCycle() {
 
 		for client.state == STATE_CONNECTED {
 			if err := client.recvMessage(&msg); err != nil {
+				client.state = STATE_ERROR
 				break
 			}
 
@@ -357,6 +361,10 @@ func (client *Client) sendMessage(m Message) error {
 
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
+
+	if client.state != STATE_CONNECTED {
+		return ErrNotConnected
+	}
 
 	if m.Header.Id == 0 {
 		client.msgIdOut++
