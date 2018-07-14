@@ -362,7 +362,7 @@ func (client *Client) sendMessage(m Message) error {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
 
-	if client.state == STATE_ERROR {
+	if client.state != STATE_CONNECTED {
 		return ErrNotConnected
 	}
 
