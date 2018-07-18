@@ -341,7 +341,7 @@ func (client *Client) connect() error {
 
 	msg.Build(CMD_LOGIN).PushString(client.authKey)
 
-	if err = client.sendMessage(msg); err != nil {
+	if err = client.sendMessageInState(msg, STATE_CONNECTING); err != nil {
 		return err
 	}
 
@@ -356,13 +356,13 @@ func (client *Client) connect() error {
 	return nil
 }
 
-func (client *Client) sendMessage(m Message) error {
+func (client *Client) sendMessageInState(m Message, expected_state int) error {
 	var err error
 
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
 
-	if client.state != STATE_CONNECTED {
+	if client.state != expected_state {
 		return ErrNotConnected
 	}
 
@@ -387,6 +387,10 @@ func (client *Client) sendMessage(m Message) error {
 	}
 	client.lastActivity = time.Now()
 	return nil
+}
+
+func (client *Client) sendMessage(m Message) error {
+	return client.sendMessageInState(m, STATE_CONNECTED)
 }
 
 func (client *Client) recvMessage(m *Message) error {
