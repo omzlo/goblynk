@@ -1,10 +1,9 @@
 package blynk
 
 import (
-	//"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/omzlo/clog"
 	"net"
 	"sync"
 	"time"
@@ -122,7 +121,7 @@ func NewClient(addr, auth string) *Client {
 }
 
 func (client *Client) Run() {
-	log.Printf("Starting goblynk\n")
+	clog.Info("Starting goblynk/")
 	client.runCycle()
 }
 
@@ -212,8 +211,8 @@ func (client *Client) runCycle() {
 		backoff := 3 * time.Second
 		for {
 			if err := client.connect(); err != nil {
-				log.Printf("Connection to %s failed: %s", client.address, err)
-				log.Printf("Waiting %s before attempting to reconnect.", backoff)
+				clog.Warning("Connection to %s failed: %s", client.address, err)
+				clog.Info("Waiting %s seconds before attempting to reconnect.", backoff)
 				time.Sleep(backoff)
 				if backoff < 192*time.Second {
 					backoff = 2 * backoff
@@ -224,11 +223,11 @@ func (client *Client) runCycle() {
 		}
 
 		connectionCount++
-		log.Printf("Connected and authenticated to %s, connection cycle %d\n", client.address, connectionCount)
+		clog.Info("Connected and authenticated to %s, connection cycle %d", client.address, connectionCount)
 
 		if client.onConnect != nil {
 			if err := client.onConnect(connectionCount); err != nil {
-				log.Printf("OnConnect returned an error: %s", err)
+				clog.Warning("OnConnect returned an error: %s", err)
 				client.conn.Close()
 				return
 			}
@@ -240,12 +239,12 @@ func (client *Client) runCycle() {
 				break
 			}
 
-			log.Printf("Recieved message: %s", msg)
+			clog.Debug("Received message: %s", msg)
 
 			switch msg.Header.Command {
 			case CMD_RESPONSE:
 				if msg.Header.Length != STATUS_SUCCESS {
-					log.Printf("Recieved error status %d", msg.Header.Length)
+					clog.Warning("Recieved error status %d", msg.Header.Length)
 					client.state = STATE_ERROR
 				}
 			case CMD_HARDWARE:
@@ -257,7 +256,7 @@ func (client *Client) runCycle() {
 			}
 		}
 
-		log.Printf("Closing connection...")
+		clog.Info("Closing connection to %s", client.address)
 		client.conn.Close()
 	}
 }
@@ -268,7 +267,7 @@ func (client *Client) processHardwareCommand(m Message) {
 	fn, ok := m.Body.AsString(0)
 
 	if !ok {
-		log.Printf("Missing function in hardware message body %s, ignoring", m.Body)
+		clog.Warning("Missing function in hardware message body %s, ignoring", m.Body)
 		return
 	}
 
@@ -276,33 +275,33 @@ func (client *Client) processHardwareCommand(m Message) {
 	case "vw":
 		pin, ok := m.Body.AsInt(1)
 		if !ok {
-			log.Printf("Missing pin in hardware message, ignoring")
+			clog.Debug("Missing pin in hardware message, ignoring")
 			return
 		}
 		if writer, ok := client.writers[uint(pin)]; ok {
 			m.Body.Shift(2)
-			log.Printf("Calling virtual pin writer %d with parameters %s", pin, m.Body)
+			clog.Debug("Calling virtual pin writer %d with parameters %s", pin, m.Body)
 			writer.DeviceWrite(uint(pin), m.Body)
 		} else {
-			log.Printf("Ignoring write to virtual pin %d: no handler", pin)
+			clog.Debug("Ignoring write to virtual pin %d: no handler", pin)
 		}
 	case "vr":
 		pin, ok := m.Body.AsInt(1)
 		if !ok {
-			log.Printf("Missing pin in hardware message, ignoring")
+			clog.Warning("Missing pin in hardware message, ignoring")
 			return
 		}
 		if reader, ok := client.readers[uint(pin)]; ok {
 			response.Build(CMD_HARDWARE).PushString("vw").PushInt(int(pin))
 			//response.Header.Id = m.Header.Id
-			log.Printf("Calling virtual pin reader %d", pin)
+			clog.Debug("Calling virtual pin reader %d", pin)
 			reader.DeviceRead(uint(pin), &response.Body)
 			client.sendMessage(response)
 		} else {
-			log.Printf("Ignoring read to virtual pin %d: no handler", pin)
+			clog.Debug("Ignoring read to virtual pin %d: no handler", pin)
 		}
 	default:
-		log.Printf("Ignoring hardware command '%s'", fn)
+		clog.Debug("Ignoring hardware command '%s'", fn)
 	}
 }
 
@@ -337,7 +336,7 @@ func (client *Client) connect() error {
 	}
 	client.conn.SetNoDelay(true)
 
-	log.Printf("Connected to %s", client.address)
+	clog.Debug("Connected to %s with TCP", client.address)
 
 	msg.Build(CMD_LOGIN).PushString(client.authKey)
 
@@ -373,12 +372,12 @@ func (client *Client) sendMessageInState(m Message, expected_state int) error {
 
 	if m.Header.Command == CMD_RESPONSE {
 		data, _ := m.Header.MarshalBinary()
-		log.Printf("Sending header %s", m.Header)
+		clog.DebugX("Sending header %s", m.Header)
 		_, err = client.conn.Write(data)
 
 	} else {
 		data, _ := m.MarshalBinary()
-		log.Printf("Sending message %s", m)
+		clog.DebugX("Sending message %s", m)
 		_, err = client.conn.Write(data)
 	}
 
@@ -396,7 +395,7 @@ func (client *Client) sendMessage(m Message) error {
 func (client *Client) recvMessage(m *Message) error {
 	var buf [2000]byte
 
-	log.Printf("Waiting data to read")
+	clog.DebugX("Waiting data to read")
 	if _, err := client.conn.Read(buf[0:5]); err != nil {
 		return err
 	}
@@ -412,7 +411,7 @@ func (client *Client) recvMessage(m *Message) error {
 		}
 		m.Body.UnmarshalBinary(buf[5 : m.Header.Length+5])
 	}
-	log.Printf("Received %s", m)
+	clog.DebugX("Received %s", m)
 	/*
 		if m.Header.Command != CMD_RESPONSE {
 			fmt.Print(hex.Dump(buf[:m.Header.Length+5]))
