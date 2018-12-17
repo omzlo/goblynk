@@ -120,9 +120,9 @@ func NewClient(addr, auth string) *Client {
 	return &Client{address: addr, authKey: auth, readers: make(map[uint]DeviceReader), writers: make(map[uint]DeviceWriter)}
 }
 
-func (client *Client) Run() {
+func (client *Client) RunEventLoop() error {
 	clog.Info("Starting goblynk/")
-	client.runCycle()
+	return client.runCycle()
 }
 
 func (client *Client) VirtualWrite(pin uint, v ...interface{}) error {
@@ -201,7 +201,7 @@ func (client *Client) OnConnect(fn func(uint) error) {
 
 /* private */
 
-func (client *Client) runCycle() {
+func (client *Client) runCycle() error {
 	var msg Message
 	var connectionCount uint = 0
 
@@ -229,7 +229,7 @@ func (client *Client) runCycle() {
 			if err := client.onConnect(connectionCount); err != nil {
 				clog.Warning("OnConnect returned an error: %s", err)
 				client.conn.Close()
-				return
+				return err
 			}
 		}
 
@@ -259,6 +259,7 @@ func (client *Client) runCycle() {
 		clog.Info("Closing connection to %s", client.address)
 		client.conn.Close()
 	}
+	return nil
 }
 
 func (client *Client) processHardwareCommand(m Message) {
